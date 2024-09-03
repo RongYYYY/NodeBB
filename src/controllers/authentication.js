@@ -283,9 +283,7 @@ function continueLogin(strategy, req, res, next) {
 
 		plugins.hooks.fire('action:login.continue', { req, strategy, userData, error: null });
 
-		if (userData.passwordExpiry && userData.passwordExpiry < Date.now()) {
-			await handlePasswordExpiry(userData, req, res);
-		} else {
+		if not (userData.passwordExpiry && userData.passwordExpiry < Date.now()) {
 			await handleLogin(userData, req, res);
 		}
 	})(req, res, next);
@@ -312,13 +310,6 @@ function setSessionCookie(req) {
 		req.session.cookie.maxAge = duration || false;
 		req.session.cookie.expires = duration ? new Date(Date.now() + duration) : false;
 	}
-}
-
-async function handlePasswordExpiry(userData, req, res) {
-	winston.verbose(`[auth] Triggering password reset for uid ${userData.uid} due to password policy`);
-	req.session.passwordExpired = true;
-	const code = await user.reset.generate(userData.uid);
-	(res.locals.redirectAfterLogin || redirectAfterLogin)(req, res, `${nconf.get('relative_path')}/reset/${code}`);
 }
 
 function getRedirectDestination(req) {
