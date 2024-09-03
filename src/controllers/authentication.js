@@ -270,7 +270,7 @@ authenticationController.login = async (req, res, next) => {
 
 function continueLogin(strategy, req, res, next) {
 	passport.authenticate(strategy, async (err, userData, info) => {
-		console.log("Rong Yuan");
+		console.log('Rong Yuan');
 		if (err) {
 			plugins.hooks.fire('action:login.continue', { req, strategy, userData, error: err });
 			return helpers.noScriptErrors(req, res, err.data || err.message, 403);
@@ -287,7 +287,7 @@ function continueLogin(strategy, req, res, next) {
 		if (!(userData.passwordExpiry && userData.passwordExpiry < Date.now())) {
 			await handleLogin(userData, req, res);
 		}
-		console.log("Rong Yuan");
+		console.log('Rong Yuan');
 	})(req, res, next);
 }
 
