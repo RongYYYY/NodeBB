@@ -317,7 +317,7 @@ function continueLogin(strategy, req, res, next) {
 			} else {
 				destination = `${nconf.get('relative_path')}/`;
 			}
-
+			
 			(res.locals.redirectAfterLogin || redirectAfterLogin)(req, res, destination);
 		}
 	})(req, res, next);
