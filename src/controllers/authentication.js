@@ -283,16 +283,14 @@ function continueLogin(strategy, req, res, next) {
 
 		plugins.hooks.fire('action:login.continue', { req, strategy, userData, error: null });
 
-		if not (userData.passwordExpiry && userData.passwordExpiry < Date.now()) {
+		if (! (userData.passwordExpiry && userData.passwordExpiry < Date.now())) {
 			await handleLogin(userData, req, res);
 		}
 	})(req, res, next);
 }
 
 function handleNoUserData(info, strategy, req, res) {
-	if (info instanceof Error) {
-		info = info.message;
-	} else if (typeof info === 'object') {
+	if (typeof info === 'object') {
 		info = '[[error:invalid-username-or-password]]';
 	}
 
