@@ -270,7 +270,7 @@ authenticationController.login = async (req, res, next) => {
 
 function continueLogin(strategy, req, res, next) {
 	passport.authenticate(strategy, async (err, userData, info) => {
-
+		
 		if (err) {
 			plugins.hooks.fire('action:login.continue', { req, strategy, userData, error: err });
 			return helpers.noScriptErrors(req, res, err.data || err.message, 403);
@@ -318,7 +318,6 @@ function setSessionCookie(req) {
 async function handlePasswordExpiry(userData, req, res) {
 	winston.verbose(`[auth] Triggering password reset for uid ${userData.uid} due to password policy`);
 	req.session.passwordExpired = true;
-	
 	const code = await user.reset.generate(userData.uid);
 	(res.locals.redirectAfterLogin || redirectAfterLogin)(req, res, `${nconf.get('relative_path')}/reset/${code}`);
 }
@@ -326,7 +325,7 @@ async function handlePasswordExpiry(userData, req, res) {
 function getRedirectDestination(req) {
 	let destination;
 	if (req.session.returnTo) {
-		destination = req.session.returnTo.startsWith('http') ? 
+		destination = req.session.returnTo.startsWith('http') ?
 			req.session.returnTo :
 			nconf.get('relative_path') + req.session.returnTo;
 		delete req.session.returnTo;
