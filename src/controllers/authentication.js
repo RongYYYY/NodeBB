@@ -271,56 +271,80 @@ authenticationController.login = async (req, res, next) => {
 function continueLogin(strategy, req, res, next) {
 	passport.authenticate(strategy, async (err, userData, info) => {
 		if (err) {
-			plugins.hooks.fire('action:login.continue', { req, strategy, userData, error: err });
-			return helpers.noScriptErrors(req, res, err.data || err.message, 403);
+			return handleAuthError(err, strategy, req, res);
 		}
 
 		if (!userData) {
-			if (info instanceof Error) {
-				info = info.message;
-			} else if (typeof info === 'object') {
-				info = '[[error:invalid-username-or-password]]';
-			}
-
-			plugins.hooks.fire('action:login.continue', { req, strategy, userData, error: new Error(info) });
-			return helpers.noScriptErrors(req, res, info, 403);
+			return handleNoUserData(info, strategy, req, res);
 		}
 
-		// Alter user cookie depending on passed-in option
-		if (req.body.remember === 'on') {
-			const duration = meta.getSessionTTLSeconds() * 1000;
-			req.session.cookie.maxAge = duration;
-			req.session.cookie.expires = new Date(Date.now() + duration);
-		} else {
-			const duration = meta.config.sessionDuration * 1000;
-			req.session.cookie.maxAge = duration || false;
-			req.session.cookie.expires = duration ? new Date(Date.now() + duration) : false;
-		}
+		setSessionCookie(req);
 
 		plugins.hooks.fire('action:login.continue', { req, strategy, userData, error: null });
 
-		if (userData.passwordExpiry && userData.passwordExpiry < Date.now()) {
-			winston.verbose(`[auth] Triggering password reset for uid ${userData.uid} due to password policy`);
-			req.session.passwordExpired = true;
-
-			const code = await user.reset.generate(userData.uid);
-			(res.locals.redirectAfterLogin || redirectAfterLogin)(req, res, `${nconf.get('relative_path')}/reset/${code}`);
-		} else {
-			delete req.query.lang;
-			await authenticationController.doLogin(req, userData.uid);
-			let destination;
-			if (req.session.returnTo) {
-				destination = req.session.returnTo.startsWith('http') ?
-					req.session.returnTo :
-					nconf.get('relative_path') + req.session.returnTo;
-				delete req.session.returnTo;
-			} else {
-				destination = `${nconf.get('relative_path')}/`;
-			}
-
-			(res.locals.redirectAfterLogin || redirectAfterLogin)(req, res, destination);
+		if (isPasswordExpired(userData)) {
+			return handlePasswordExpiry(req, res, userData);
 		}
+
+		await handleSuccessfulLogin(req, res, userData);
 	})(req, res, next);
+}
+
+function handleAuthError(err, strategy, req, res) {
+	plugins.hooks.fire('action:login.continue', { req, strategy, userData: null, error: err });
+	return helpers.noScriptErrors(req, res, err.data || err.message, 403);
+}
+
+function handleNoUserData(info, strategy, req, res) {
+	if (info instanceof Error) {
+		info = info.message;
+	} else if (typeof info === 'object') {
+		info = '[[error:invalid-username-or-password]]';
+	}
+
+	plugins.hooks.fire('action:login.continue', { req, strategy, userData: null, error: new Error(info) });
+	return helpers.noScriptErrors(req, res, info, 403);
+}
+
+function setSessionCookie(req) {
+	const duration = req.body.remember === 'on' ? meta.getSessionTTLSeconds() * 1000 : meta.config.sessionDuration * 1000;
+	req.session.cookie.maxAge = duration || false;
+	req.session.cookie.expires = duration ? new Date(Date.now() + duration) : false;
+}
+
+function isPasswordExpired(userData) {
+	return userData.passwordExpiry && userData.passwordExpiry < Date.now();
+}
+
+async function handlePasswordExpiry(req, res, userData) {
+	winston.verbose(`[auth] Triggering password reset for uid ${userData.uid} due to password policy`);
+	req.session.passwordExpired = true;
+
+	const code = await user.reset.generate(userData.uid);
+	redirect(req, res, `${nconf.get('relative_path')}/reset/${code}`);
+}
+
+async function handleSuccessfulLogin(req, res, userData) {
+	delete req.query.lang;
+	await authenticationController.doLogin(req, userData.uid);
+
+	const destination = getRedirectDestination(req);
+	redirect(req, res, destination);
+}
+
+function getRedirectDestination(req) {
+	if (req.session.returnTo) {
+		const destination = req.session.returnTo.startsWith('http') ?
+			req.session.returnTo :
+			nconf.get('relative_path') + req.session.returnTo;
+		delete req.session.returnTo;
+		return destination;
+	}
+	return `${nconf.get('relative_path')}/`;
+}
+
+function redirect(req, res, destination) {
+	(res.locals.redirectAfterLogin || redirectAfterLogin)(req, res, destination);
 }
 
 function redirectAfterLogin(req, res, destination) {
