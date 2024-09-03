@@ -270,7 +270,6 @@ authenticationController.login = async (req, res, next) => {
 
 function continueLogin(strategy, req, res, next) {
 	passport.authenticate(strategy, async (err, userData, info) => {
-		
 		if (err) {
 			plugins.hooks.fire('action:login.continue', { req, strategy, userData, error: err });
 			return helpers.noScriptErrors(req, res, err.data || err.message, 403);
