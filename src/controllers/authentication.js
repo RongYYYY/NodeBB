@@ -271,31 +271,17 @@ authenticationController.login = async (req, res, next) => {
 function continueLogin(strategy, req, res, next) {
 	passport.authenticate(strategy, async (err, userData, info) => {
 		if (err) {
-			plugins.hooks.fire('action:login.continue', { req, strategy, userData, error: err });
+			plugins.hooks.fire('action:login.continue', { req, strategy, userData: null, error: err });
 			return helpers.noScriptErrors(req, res, err.data || err.message, 403);
 		}
 
 		if (!userData) {
-			if (info instanceof Error) {
-				info = info.message;
-			} else if (typeof info === 'object') {
-				info = '[[error:invalid-username-or-password]]';
-			}
-
-			plugins.hooks.fire('action:login.continue', { req, strategy, userData, error: new Error(info) });
-			return helpers.noScriptErrors(req, res, info, 403);
+			const message = getErrorMessage(info);
+			plugins.hooks.fire('action:login.continue', { req, strategy, userData: null, error: new Error(message) });
+			return helpers.noScriptErrors(req, res, message, 403);
 		}
 
-		// Alter user cookie depending on passed-in option
-		if (req.body.remember === 'on') {
-			const duration = meta.getSessionTTLSeconds() * 1000;
-			req.session.cookie.maxAge = duration;
-			req.session.cookie.expires = new Date(Date.now() + duration);
-		} else {
-			const duration = meta.config.sessionDuration * 1000;
-			req.session.cookie.maxAge = duration || false;
-			req.session.cookie.expires = duration ? new Date(Date.now() + duration) : false;
-		}
+		setSessionCookie(req);
 
 		plugins.hooks.fire('action:login.continue', { req, strategy, userData, error: null });
 
@@ -304,24 +290,50 @@ function continueLogin(strategy, req, res, next) {
 			req.session.passwordExpired = true;
 
 			const code = await user.reset.generate(userData.uid);
-			(res.locals.redirectAfterLogin || redirectAfterLogin)(req, res, `${nconf.get('relative_path')}/reset/${code}`);
-		} else {
-			delete req.query.lang;
-			await authenticationController.doLogin(req, userData.uid);
-			let destination;
-			if (req.session.returnTo) {
-				destination = req.session.returnTo.startsWith('http') ?
-					req.session.returnTo :
-					nconf.get('relative_path') + req.session.returnTo;
-				delete req.session.returnTo;
-			} else {
-				destination = `${nconf.get('relative_path')}/`;
-			}
-
-			(res.locals.redirectAfterLogin || redirectAfterLogin)(req, res, destination);
+			return redirect(req, res, `${nconf.get('relative_path')}/reset/${code}`);
 		}
+
+		delete req.query.lang;
+		await authenticationController.doLogin(req, userData.uid);
+		const destination = getRedirectDestination(req);
+		return redirect(req, res, destination);
 	})(req, res, next);
 }
+
+function getErrorMessage(info) {
+	if (info instanceof Error) {
+		return info.message;
+	} else if (typeof info === 'object') {
+		return '[[error:invalid-username-or-password]]';
+	}
+	return info;
+}
+
+function setSessionCookie(req) {
+	if (req.body.remember === 'on') {
+		const duration = meta.getSessionTTLSeconds() * 1000;
+		req.session.cookie.maxAge = duration;
+		req.session.cookie.expires = new Date(Date.now() + duration);
+	} else {
+		const duration = meta.config.sessionDuration * 1000;
+		req.session.cookie.maxAge = duration || false;
+		req.session.cookie.expires = duration ? new Date(Date.now() + duration) : false;
+	}
+}
+
+function getRedirectDestination(req) {
+	if (req.session.returnTo) {
+		const destination = req.session.returnTo.startsWith('http') ? req.session.returnTo : nconf.get('relative_path') + req.session.returnTo;
+		delete req.session.returnTo;
+		return destination;
+	}
+	return `${nconf.get('relative_path')}/`;
+}
+
+function redirect(req, res, destination) {
+	(res.locals.redirectAfterLogin || redirectAfterLogin)(req, res, destination);
+}
+
 
 function redirectAfterLogin(req, res, destination) {
 	if (req.body.noscript === 'true') {
