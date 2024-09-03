@@ -299,7 +299,7 @@ function handleNoUserData(info, strategy, req, res) {
 		info = '[[error:invalid-username-or-password]]';
 	}
 
-	plugins.hooks.fire('action:login.continue', { req, strategy, userData, error: new Error(info) });
+	plugins.hooks.fire('action:login.continue', { req, strategy, userData: null, error: new Error(info) });
 	return helpers.noScriptErrors(req, res, info, 403);
 }
 
