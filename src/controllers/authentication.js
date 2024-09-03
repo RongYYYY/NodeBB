@@ -283,7 +283,7 @@ function continueLogin(strategy, req, res, next) {
 
 		plugins.hooks.fire('action:login.continue', { req, strategy, userData, error: null });
 
-		if (! (userData.passwordExpiry && userData.passwordExpiry < Date.now())) {
+		if (!(userData.passwordExpiry && userData.passwordExpiry < Date.now())) {
 			await handleLogin(userData, req, res);
 		}
 	})(req, res, next);
